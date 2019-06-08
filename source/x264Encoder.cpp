@@ -1,4 +1,5 @@
-#include "includes/x264Encoder.h"
+#include <x264Encoder.h>
+
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define M 640
 #define N 480
@@ -9,7 +10,7 @@ struct buffer {
 };
 
 
-
+//TODO - Change hardcoded video dev name
 const char              *dev_name = "/dev/video0";
 static int              fd = -1;
 struct buffer           *buffers;
@@ -267,7 +268,7 @@ void x264Encoder:: mainloop()
 				fprintf(stderr, "v4l2 select timeout\n");
 				exit(EXIT_FAILURE);
 			}
-			
+
 			if (this->read_frame())
 				break;
 			/* EAGAIN - continue select loop. */
@@ -324,9 +325,9 @@ void x264Encoder:: yuyv(const void * p, int size)
 	param.b_repeat_headers = 1;
 	param.b_annexb = 1;
 	param.i_fps_num = 24;
-   	param.i_fps_den = 1;
+	param.i_fps_den = 1;
 
-	
+
 	if( x264_param_apply_profile( &param, "baseline" ) < 0 )
 		exit(1);
 
@@ -363,19 +364,19 @@ void x264Encoder:: yuyv(const void * p, int size)
 	i_frame_size = x264_encoder_encode( h, &nal, &i_nal, &pic, &pic_out );
 	if(i_frame_size > 0)
 	{
-			memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
-			nalc0->i_payload=nal[0].i_payload;
-			outputQueue.push(nalc0);
-			memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
-                        nalc1->i_payload=nal[1].i_payload;
-                        outputQueue.push(nalc1);
-			memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
-                        nalc2->i_payload=nal[2].i_payload;
-                        outputQueue.push(nalc2);
-			memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
-                        nalc3->i_payload=nal[3].i_payload;
-                        outputQueue.push(nalc3);
-		
+		memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
+		nalc0->i_payload=nal[0].i_payload;
+		outputQueue.push(nalc0);
+		memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
+		nalc1->i_payload=nal[1].i_payload;
+		outputQueue.push(nalc1);
+		memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
+		nalc2->i_payload=nal[2].i_payload;
+		outputQueue.push(nalc2);
+		memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
+		nalc3->i_payload=nal[3].i_payload;
+		outputQueue.push(nalc3);
+
 	}
 	while( x264_encoder_delayed_frames( h ) )
 	{
@@ -383,26 +384,26 @@ void x264Encoder:: yuyv(const void * p, int size)
 
 		if(i_frame_size > 0)
 		{
-				
-	                memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
-                        nalc0->i_payload=nal[0].i_payload;
-                        outputQueue.push(nalc0);
-                        memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
-                        nalc1->i_payload=nal[1].i_payload;
-                        outputQueue.push(nalc1);
-                        memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
-                        nalc2->i_payload=nal[2].i_payload;
-                        outputQueue.push(nalc2);
-                        memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
-                        nalc3->i_payload=nal[3].i_payload;
-                        outputQueue.push(nalc3);
+
+			memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
+			nalc0->i_payload=nal[0].i_payload;
+			outputQueue.push(nalc0);
+			memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
+			nalc1->i_payload=nal[1].i_payload;
+			outputQueue.push(nalc1);
+			memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
+			nalc2->i_payload=nal[2].i_payload;
+			outputQueue.push(nalc2);
+			memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
+			nalc3->i_payload=nal[3].i_payload;
+			outputQueue.push(nalc3);
 
 		}
 
 	}
-	
-x264_encoder_close( h );
-x264_picture_clean( &pic );
+
+	x264_encoder_close( h );
+	x264_picture_clean( &pic );
 
 }
 
@@ -465,13 +466,13 @@ int x264Encoder::xioctl(int fh, int request, void *arg)
 void x264Encoder::initilize()
 {
 	nalc0 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-        nalc0->p_payload =(uint8_t*)malloc(60000);
-        nalc1 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-        nalc1->p_payload =(uint8_t*)malloc(60000);
-        nalc2 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-        nalc2->p_payload =(uint8_t*)malloc(60000);
-        nalc3 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-        nalc3->p_payload =(uint8_t*)malloc(60000);
+	nalc0->p_payload =(uint8_t*)malloc(60000);
+	nalc1 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
+	nalc1->p_payload =(uint8_t*)malloc(60000);
+	nalc2 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
+	nalc2->p_payload =(uint8_t*)malloc(60000);
+	nalc3 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
+	nalc3->p_payload =(uint8_t*)malloc(60000);
 
 }
 
