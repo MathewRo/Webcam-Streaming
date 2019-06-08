@@ -1,0 +1,9 @@
+*.o
+*.a
+*.so
+*.dll
+build/*
+!build/.gitkeep
+bin/*
+!bin/.gitkeep
+
