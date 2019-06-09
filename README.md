@@ -4,7 +4,7 @@
 Webcam based live video streaming server- to N number of clients.
 Please Do report Bugs if you find any. Feel free to distribute!
 
-## Installation
+# Installation
 Webcam Streamer is an application developed for streaming webcam video using a combo of V4l2, x264 and LIVE555. The output Video streamed can be streamed live or maybe stored as  per the use. 
 
 ## Pre-requisites
@@ -53,7 +53,7 @@ sudo apt-get install v4l-utils
 ```
 Give password when prompted.
 
-## Installation
+## Run the App
 Once the libraries have been installed, navigate to 
 ```bash
 cd build
