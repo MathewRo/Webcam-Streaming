@@ -24,11 +24,10 @@ link_directories(
 	)
 
 add_executable(webcam
-	${RUNTIME_PATH}/source/H264LiveServerMediaSession.cpp
-	${RUNTIME_PATH}/source/LiveSourceWithx264.cpp
-	${RUNTIME_PATH}/source/x264Encoder.cpp
-
-	${RUNTIME_PATH}/webcam.cpp
+	${RUNTIME_PATH}/src/H264LiveServerMediaSession.cpp
+	${RUNTIME_PATH}/src/LiveSourceWithx264.cpp
+	${RUNTIME_PATH}/src/x264Encoder.cpp
+	${RUNTIME_PATH}/src/webcam.cpp
 	)
 
 set(EXECUTABLE_OUTPUT_PATH  ../bin/)
