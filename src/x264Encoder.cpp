@@ -1,30 +1,37 @@
 #include <x264Encoder.h>
-
+// Macro for clearing
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
-#define M 640
-#define N 480
-#include <stdio.h>
+
+// defines required for V4L2 and x264
+#define VIDEO_WIDTH 		640
+#define VIDEO_HEIGHT 		480
+#define NAL_PAYLOAD_SIZE 	60000
+#define INVALID_FILE_DESC	-1
+#define XIOCTL_FAIL			-1
+
+// buffer for getting data out of v4l2
 struct buffer {
 	void   *start;
 	size_t  length;
 };
 
+// Name of video device. Have to see if we can
+// avoid hardcoding it. Want to avoid calling system
+// api (system())
+const char *dev_name = "/dev/video0";
+struct buffer *buffers;
+long row = 		VIDEO_WIDTH*VIDEO_HEIGHT/2;
 
-//TODO - Change hardcoded video dev name
-const char              *dev_name = "/dev/video0";
-static int              fd = -1;
-struct buffer           *buffers;
-static unsigned int     n_buffers;
-long row = 		M*N/2;
-void 			yuyv(const void * , int);	
-static x264_nal_t 	*nalc0;
-static x264_nal_t	*nalc1;
-static x264_nal_t       *nalc2;
-static x264_nal_t       *nalc3;
+void yuyv(const void * , int);
 
-x264Encoder::x264Encoder(void)
+x264Encoder::x264Encoder(UsageEnvironment & env): usage_env(env), h(NULL)
 {
-
+	int i = 0;
+	for (; i < MAX_NAL_COUNT; i++) {
+		nal_references[i] = NULL;
+	}
+	video_dev_desc = INVALID_FILE_DESC;
+	mmap_buffer_cnt = 0;
 }
 
 x264Encoder::~x264Encoder(void)
@@ -32,20 +39,33 @@ x264Encoder::~x264Encoder(void)
 
 }
 
+/**
+ * Cleanup all the memory allocated with
+ * nal buffers
+ *
+ * @in  - void
+ * @out	- void
+ *
+ **/
 void x264Encoder::unInitilize()
 {
-	free(nalc0->p_payload);
-	free(nalc1->p_payload);
-	free(nalc2->p_payload);
-	free(nalc3->p_payload);
+	int i = 0;
+	for (; i < MAX_NAL_COUNT; i++) {
+		if (nal_references[i]) {
+			if (nal_references[i]->p_payload) {
+			free(nal_references[i]->p_payload);
+			}
+		free(nal_references[i]);
+		}
+	}
 }
 
-void x264Encoder::encodeFrame()
+void x264Encoder :: encodeFrame()
 {
 
 }
 
-bool x264Encoder::isNalsAvailableInOutputQueue()
+bool x264Encoder :: isNalsAvailableInOutputQueue()
 {
 	if(outputQueue.empty() == true)
 	{
@@ -57,7 +77,7 @@ bool x264Encoder::isNalsAvailableInOutputQueue()
 	}
 }
 
-x264_nal_t * x264Encoder::getNalUnit()
+x264_nal_t * x264Encoder :: getNalUnit()
 {
 
 	x264_nal_t * nal;
@@ -65,242 +85,302 @@ x264_nal_t * x264Encoder::getNalUnit()
 	outputQueue.pop();
 	return nal;
 }
-void x264Encoder:: open_device()
+
+/**
+ * This routine would check for the video dev file on
+ * Linux and opens the same if found
+ *
+ * @in 	- None
+ * @out - true  - if file opened
+ * 		- false - for failure
+ * */
+bool x264Encoder :: open_device()
 {
 	struct stat st;
 
+	/* get file stats filled */
 	if (-1 == stat(dev_name, &st)) {
-		fprintf(stderr, "Cannot identify '%s': %d, %s\n",
-				dev_name, errno, strerror(errno));
-		exit(EXIT_FAILURE);
+		usage_env << "Cannot identify '%s': %d, %s\n" <<
+				dev_name << errno << strerror(errno);
+		return false;
 	}
 
+	/* check if its a valid char device */
 	if (!S_ISCHR(st.st_mode)) {
-		fprintf(stderr, "%s is no device\n", dev_name);
-		exit(EXIT_FAILURE);
+		usage_env << "%s is no device\n" << dev_name;
+		return false;
 	}
 
-	fd = open(dev_name, O_RDWR /* required */ | O_NONBLOCK, 0);
+	/* open the video dev file */
+	video_dev_desc = open(dev_name, O_RDWR /* required */ | O_NONBLOCK, 0);
 
-	if (-1 == fd) {
-		fprintf(stderr, "Cannot open '%s': %d, %s\n",
-				dev_name, errno, strerror(errno));
-		exit(EXIT_FAILURE);
+	if (INVALID_FILE_DESC == video_dev_desc) {
+		usage_env << "Cannot open '%s': %d, %s\n" <<
+				dev_name << errno << strerror(errno);
+		return false;
 	}
+
+	return true;
 }
 
-void x264Encoder:: init_device()
+/**
+ * This method would query the video capture device,
+ * based on the capabilities, set the cropping, format
+ * and resolution.
+ * */
+bool x264Encoder :: init_device()
 {
-	struct v4l2_capability cap;
-	struct v4l2_cropcap cropcap;
-	struct v4l2_crop crop;
-	struct v4l2_format fmt;
+	struct v4l2_capability v4_capability;
+	struct v4l2_cropcap v4_cropcap;
+	struct v4l2_crop v4_crop;
+	struct v4l2_format v4_format;
 
 
-	if (-1 == this->xioctl(fd, VIDIOC_QUERYCAP, &cap)) {
+	/* query the device capabilities */
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_QUERYCAP, &v4_capability)) {
 		if (EINVAL == errno) {
-			fprintf(stderr, "%s is no V4L2 device\n",
-					dev_name);
-			exit(EXIT_FAILURE);
+			usage_env << "%s is no V4L2 device\n" << dev_name;
 		} else {
-			this->errno_exit("VIDIOC_QUERYCAP");
+			x264_print_err("VIDIOC_QUERYCAP");
 		}
+		return false;
 	}
 
-	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
-		fprintf(stderr, "%s is no video capture device\n",
-				dev_name);
-		exit(EXIT_FAILURE);
+	/* check if device can capture video */
+	if (!(v4_capability.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+		usage_env << "%s is not a video capture device\n" << dev_name;
+		return false;
 	}
 
-
-	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
-		fprintf(stderr, "%s does not support streaming i/o\n",
-				dev_name);
-		exit(EXIT_FAILURE);
+	/* check if the device is a stream i/o */
+	if (!(v4_capability.capabilities & V4L2_CAP_STREAMING)) {
+		usage_env << "%s does not support streaming i/o\n" << dev_name;
+		return false;
 	}
 
+	CLEAR(v4_cropcap);
 
-	/* Select video input, video standard and tune here. */
+	v4_cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
+	/* get details on the video crop capability */
+	if (0 == x264_ioctl(video_dev_desc, VIDIOC_CROPCAP, &v4_cropcap)) {
+		v4_crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		v4_crop.c = v4_cropcap.defrect; /* reset to default */
 
-	CLEAR(cropcap);
-
-	cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-	if (0 == xioctl(fd, VIDIOC_CROPCAP, &cropcap)) {
-		crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		crop.c = cropcap.defrect; /* reset to default */
-
-		if (-1 == this->xioctl(fd, VIDIOC_S_CROP, &crop)) {
-			switch (errno) {
-				case EINVAL:
-					/* Cropping not supported. */
-					break;
-				default:
-					/* Errors ignored. */
-					break;
-			}
+		if (-1 == x264_ioctl(video_dev_desc, VIDIOC_S_CROP, &v4_crop)) {
+			/* ignore error */
+			usage_env << "cropping operation failed on device."
+					"continuing with default \n";
 		}
 	} else {
 		/* Errors ignored. */
+			usage_env << "crop capabilities failed. Can't crop video\n";
 	}
 
 
-	CLEAR(fmt);
+	CLEAR(v4_format);
 
-	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width       = M;
-	fmt.fmt.pix.height      = N;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-	fmt.fmt.pix.field       = V4L2_FIELD_NONE;
+	v4_format.type 				  = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	v4_format.fmt.pix.width       = VIDEO_WIDTH;
+	v4_format.fmt.pix.height      = VIDEO_HEIGHT;
+	// TODO check if we can set other pixel formats and get this working
+	v4_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	v4_format.fmt.pix.field       = V4L2_FIELD_NONE;
 
-	if (-1 ==  this->xioctl(fd, VIDIOC_S_FMT, &fmt))
-		this->errno_exit("VIDIOC_S_FMT");
+	/* send the format data */
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_S_FMT, &v4_format)) {
+		x264_print_err("VIDIOC_S_FMT ioctl failed");
+		return false;
+	}
 
+	return true;
 }
 
-void x264Encoder:: init_mmap()
+/**
+ * This method sets up memory mapping for the
+ * video devices file descriptor
+ * */
+bool x264Encoder :: init_mmap()
 {
-	struct v4l2_requestbuffers req;
+	struct v4l2_requestbuffers v4_request_buffers;
 
-	CLEAR(req);
+	CLEAR(v4_request_buffers);
 
-	req.count = 4;
-	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	req.memory = V4L2_MEMORY_MMAP;
+	v4_request_buffers.count  = 4;
+	v4_request_buffers.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	v4_request_buffers.memory = V4L2_MEMORY_MMAP;
 
-	if (-1 == this->xioctl(fd, VIDIOC_REQBUFS, &req)) {
+	/* request buffers in V4L2 space which would hold the data */
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_REQBUFS, &v4_request_buffers)) {
 		if (EINVAL == errno) {
-			fprintf(stderr, "%s does not support "
-					"memory mapping\n", dev_name);
-			exit(EXIT_FAILURE);
+			usage_env << "%s does not support memory mapping\n" << dev_name;
 		} else {
-			this->errno_exit("VIDIOC_REQBUFS");
+			x264_print_err("VIDIOC_REQBUFS");
 		}
+		return false;
 	}
 
-	if (req.count < 2) {
-		fprintf(stderr, "Insufficient buffer memory on %s\n",
-				dev_name);
-		exit(EXIT_FAILURE);
+	if (v4_request_buffers.count < 2) {
+		usage_env << "Insufficient buffer memory on %s\n" <<
+				dev_name;
+		return false;
 	}
 
-	buffers = (buffer *)calloc(req.count, sizeof(*buffers));
+	mmap_buffer_cnt = v4_request_buffers.count;
+	/* allocate user space buffer object*/
+	buffers = (buffer *)calloc(mmap_buffer_cnt, sizeof(*buffers));
 
 	if (!buffers) {
-		fprintf(stderr, "Out of memory\n");
-		exit(EXIT_FAILURE);
+		usage_env << "Out of memory\n";
+		return false;
 	}
 
-	for (n_buffers = 0; n_buffers < req.count; ++n_buffers) {
+	for (int i = 0; i < mmap_buffer_cnt; i++) {
 		struct v4l2_buffer buf;
 
 		CLEAR(buf);
 
 		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory      = V4L2_MEMORY_MMAP;
-		buf.index       = n_buffers;
+		buf.index       = i;
 
-		if (-1 == this->xioctl(fd, VIDIOC_QUERYBUF, &buf))
-			this->errno_exit("VIDIOC_QUERYBUF");
+		/* Query the buffer descriptions */
+		if (-1 == x264_ioctl(video_dev_desc, VIDIOC_QUERYBUF, &buf)) {
+			x264_print_err("VIDIOC_QUERYBUF failed");
+			return false;
+		}
 
-		buffers[n_buffers].length = buf.length;
-		buffers[n_buffers].start =
+		buffers[i].length = buf.length;
+		buffers[i].start =
 			mmap(NULL /* start anywhere */,
 					buf.length,
 					PROT_READ | PROT_WRITE /* required */,
 					MAP_SHARED /* recommended */,
-					fd, buf.m.offset);
+					video_dev_desc,
+					buf.m.offset);
 
-		if (MAP_FAILED == buffers[n_buffers].start)
-			this->errno_exit("mmap");
+		if (MAP_FAILED == buffers[i].start) {
+			x264_print_err("mmap failed");
+			return false;
+		}
 	}
+	return true;
 }
 
-void x264Encoder:: start_capturing()
+bool x264Encoder:: start_capturing()
 {
 	unsigned int i;
 	enum v4l2_buf_type type;
 
-	for (i = 0; i < n_buffers; ++i) {
+	for (i = 0; i < mmap_buffer_cnt; ++i) {
 		struct v4l2_buffer buf;
 
 		CLEAR(buf);
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = i;
-
-		if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-			this->errno_exit("VIDIOC_QBUF");
+		/* Queue data into the mmap'd buf*/
+		if (-1 == x264_ioctl(video_dev_desc, VIDIOC_QBUF, &buf)) {
+			x264_print_err("VIDIOC_QBUF failed");
+			return false;
+		}
 	}
+	/* start streaming IO */
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (-1 == this->xioctl(fd, VIDIOC_STREAMON, &type))
-		this->errno_exit("VIDIOC_STREAMON");
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_STREAMON, &type)) {
+		x264_print_err("VIDIOC_STREAMON failed");
+		return false;
+	}
+
+	return true;
 
 }
 void x264Encoder:: mainloop()
 {
-	unsigned int count;
-	int frame_count=1;
-	count = frame_count;
-	while (count-- > 0) {
+	unsigned int temp_count;
+	unsigned int frame_count = 1;
+	temp_count = frame_count;
+	while (temp_count-- > 0) {
 		for (;;) {
 			fd_set fds;
 			struct timeval tv;
-			int r;
+			int ret;
 
 			FD_ZERO(&fds);
-			FD_SET(fd, &fds);
+			FD_SET(video_dev_desc, &fds);
 			/* Timeout. */
 			tv.tv_sec = 10;
 			tv.tv_usec = 0;
 
-			r = select(fd + 1, &fds, NULL, NULL, &tv);
+			ret = select(video_dev_desc + 1, &fds, NULL, NULL, &tv);
 
-			if (-1 == r) {
+			if (-1 == ret) {
 				if (EINTR == errno)
 					continue;
-				this->errno_exit("select [h264]");
+				x264_print_err("select [h264]");
+				return;
 			}
 
-			if (0 == r) {
-				fprintf(stderr, "v4l2 select timeout\n");
-				exit(EXIT_FAILURE);
+			if (0 == ret) {
+				usage_env << "v4l2 select timeout\n";
+				return;
 			}
 
-			if (this->read_frame())
+			if (read_frame())
 				break;
 			/* EAGAIN - continue select loop. */
 		}
 	}
 }
 
+/**
+ *
+ * */
 void x264Encoder:: stop_capturing()
 {
 	enum v4l2_buf_type type;
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (-1 ==this->xioctl(fd, VIDIOC_STREAMOFF, &type))
-		this->errno_exit("VIDIOC_STREAMOFF");
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_STREAMOFF, &type)) {
+		x264_print_err("VIDIOC_STREAMOFF");
+		return;
+	}
 }
+
+/**
+ *
+ * */
 void x264Encoder:: uninit_device()
 {
 	unsigned int i;
 
-	for (i = 0; i < n_buffers; ++i)
-		if (-1 == munmap(buffers[i].start, buffers[i].length))
-			this->errno_exit("munmap");		
+	for (i = 0; i < mmap_buffer_cnt; ++i)
+		if (-1 == munmap(buffers[i].start, buffers[i].length)) {
+			x264_print_err("munmap");
+			return;
+		}
 	free(buffers);
 }
 
+/**
+ * Close the video dev file opened for capturing
+ * video data
+ *
+ * @in  - void
+ * @out - void
+ * */
 void x264Encoder:: close_device()
 {
-	if (-1 == close(fd))
-		this->errno_exit("close");
+	if (-1 == close(video_dev_desc)) {
+		x264_print_err("close failed on video_dev file");
+		return;
+	}
 
-	fd = -1;
+	video_dev_desc = INVALID_FILE_DESC;
 }
+
+/**
+ * */
 void x264Encoder:: yuyv(const void * p, int size)
 {
 	int i,j;
@@ -315,43 +395,43 @@ void x264Encoder:: yuyv(const void * p, int size)
 	x264_nal_t *nal;
 	int i_nal;
 	if( x264_param_default_preset( &param, "medium", NULL ) < 0 )
-		exit(1);
+		return;
 
 
 	param.i_csp = X264_CSP_I420;
-	param.i_width  = M;
-	param.i_height = N;
+	param.i_width  = VIDEO_WIDTH;
+	param.i_height = VIDEO_HEIGHT;
 	param.b_vfr_input = 1;
 	param.b_repeat_headers = 1;
 	param.b_annexb = 1;
 	param.i_fps_num = 24;
 	param.i_fps_den = 1;
-
+	param.i_log_level = X264_LOG_NONE;
 
 	if( x264_param_apply_profile( &param, "baseline" ) < 0 )
-		exit(1);
+		return;
 
 	if( x264_picture_alloc( &pic, param.i_csp, param.i_width, param.i_height ) < 0 )
-		exit(1);
+		return;
 
 	h = x264_encoder_open( &param );
 	if( !h )
-		exit(1);
+		return;
 
 
 	typedef struct
 	{
-		uint8_t YUYVSource[M * N * 2];
+		uint8_t YUYVSource[VIDEO_WIDTH * VIDEO_HEIGHT * 2];
 	}__attribute__((__packed__)) frame_t;
 	frame_t *frame3;
 
 	frame3 =(frame_t *)p;
 
-	for (i = 0; i != M * N ; ++i)
+	for (i = 0; i != VIDEO_WIDTH * VIDEO_HEIGHT ; ++i)
 	{	
 		pic.img.plane[0][i] = frame3->YUYVSource[2*i];
 	}
-	for (j = 0; j != M * N / 4 ; j++)
+	for (j = 0; j != VIDEO_WIDTH * VIDEO_HEIGHT / 4 ; j++)
 	{          	
 
 		{
@@ -364,39 +444,26 @@ void x264Encoder:: yuyv(const void * p, int size)
 	i_frame_size = x264_encoder_encode( h, &nal, &i_nal, &pic, &pic_out );
 	if(i_frame_size > 0)
 	{
-		memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
-		nalc0->i_payload=nal[0].i_payload;
-		outputQueue.push(nalc0);
-		memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
-		nalc1->i_payload=nal[1].i_payload;
-		outputQueue.push(nalc1);
-		memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
-		nalc2->i_payload=nal[2].i_payload;
-		outputQueue.push(nalc2);
-		memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
-		nalc3->i_payload=nal[3].i_payload;
-		outputQueue.push(nalc3);
-
+		int i = 0;
+		for (; i < MAX_NAL_COUNT; i++) {
+			memcpy(nal_references[i]->p_payload, nal[i].p_payload, nal[i].i_payload);
+			nal_references[i]->i_payload = nal[i].i_payload;
+			outputQueue.push(nal_references[i]);
+		}
 	}
+
 	while( x264_encoder_delayed_frames( h ) )
 	{
 		i_frame_size = x264_encoder_encode( h, &nal, &i_nal, NULL, &pic_out );
 
 		if(i_frame_size > 0)
 		{
-
-			memcpy(nalc0->p_payload,nal[0].p_payload,nal[0].i_payload);
-			nalc0->i_payload=nal[0].i_payload;
-			outputQueue.push(nalc0);
-			memcpy(nalc1->p_payload,nal[1].p_payload,nal[1].i_payload);
-			nalc1->i_payload=nal[1].i_payload;
-			outputQueue.push(nalc1);
-			memcpy(nalc2->p_payload,nal[2].p_payload,nal[2].i_payload);
-			nalc2->i_payload=nal[2].i_payload;
-			outputQueue.push(nalc2);
-			memcpy(nalc3->p_payload,nal[3].p_payload,nal[3].i_payload);
-			nalc3->i_payload=nal[3].i_payload;
-			outputQueue.push(nalc3);
+			int i = 0;
+			for (; i < MAX_NAL_COUNT; i++) {
+				memcpy(nal_references[i]->p_payload, nal[i].p_payload, nal[i].i_payload);
+				nal_references[i]->i_payload = nal[i].i_payload;
+				outputQueue.push(nal_references[i]);
+			}
 
 		}
 
@@ -407,15 +474,22 @@ void x264Encoder:: yuyv(const void * p, int size)
 
 }
 
+/**
+ * */
 void x264Encoder:: process_image(const void * p, int size)
 {
 	yuyv(p,size);
 }
-void x264Encoder:: errno_exit(const char *s)
+
+/**
+ * */
+void x264Encoder:: x264_print_err(const char *s)
 {
-	fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
-	exit(EXIT_FAILURE);
+	usage_env << s <<" "<< errno <<"\n"<< strerror(errno);
 }
+
+/**
+ * */
 int x264Encoder::read_frame(void)
 {
 	struct v4l2_buffer buf;
@@ -426,53 +500,69 @@ int x264Encoder::read_frame(void)
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
 
-	if (-1 == this->xioctl(fd, VIDIOC_DQBUF, &buf)) {
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_DQBUF, &buf)) {
 		switch (errno) {
 			case EAGAIN:
-				return 0;
-
 			case EIO:
 				/* Could ignore EIO, see spec. */
-
 				/* fall through */
-
 			default:
-				this->errno_exit("VIDIOC_DQBUF");
+				x264_print_err("VIDIOC_DQBUF failed");
+				return 0;
 		}
 	}
 
-	assert(buf.index < n_buffers);
+	assert(buf.index < mmap_buffer_cnt);
 
-	this->process_image(buffers[buf.index].start, buf.bytesused);
+	process_image(buffers[buf.index].start, buf.bytesused);
 
-	if (-1 == this->xioctl(fd, VIDIOC_QBUF, &buf))
-		this->errno_exit("VIDIOC_QBUF");
+	if (-1 == x264_ioctl(video_dev_desc, VIDIOC_QBUF, &buf))
+		x264_print_err("VIDIOC_QBUF");
 
 	return 1;
 }
 
 
-int x264Encoder::xioctl(int fh, int request, void *arg)
+/*
+ * wrapper around ioctl. we should normally get
+ * the ioctl done in one go. If we fail due to a
+ * signal, retry
+ * @in  - fh 	  - the file on which we need the ioctl
+ * 	    - request - ioctl code
+ * 	    - arg     - arg for ioctl
+ *
+ * @out - ret	  - ioctl return status (-1 = fail)
+ * */
+int x264Encoder:: x264_ioctl(int fh, unsigned long int request, void *arg)
 {
-	int r;
+	int ret;
 
 	do {
-		r = ioctl(fh, request, arg);
-	} while (-1 == r && EINTR == errno);
+		ret = ioctl(fh, request, arg);
+	} while (-1 == ret && EINTR == errno);
 
-	return r;
+	return ret;
 }
 
-void x264Encoder::initilize()
+/**
+ * Allocate the memory for nal and their payload
+ * */
+bool x264Encoder::initilize()
 {
-	nalc0 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-	nalc0->p_payload =(uint8_t*)malloc(60000);
-	nalc1 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-	nalc1->p_payload =(uint8_t*)malloc(60000);
-	nalc2 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-	nalc2->p_payload =(uint8_t*)malloc(60000);
-	nalc3 = (x264_nal_t *)malloc(sizeof(x264_nal_t));
-	nalc3->p_payload =(uint8_t*)malloc(60000);
+	int i = 0;
+	for (; i < MAX_NAL_COUNT; i++) {
+		nal_references[i] = (x264_nal_t *)malloc(sizeof(x264_nal_t));
+		if (!nal_references[i]) {
+			usage_env << "malloc failed for nal %d \n" << i;
+			return false;
+		}
+		nal_references[i]->p_payload = (uint8_t*)malloc(NAL_PAYLOAD_SIZE);
+		if (!nal_references[i]->p_payload) {
+			usage_env << "malloc failed for nal payload %d \n" << i;
+			return false;
+		}
+	}
 
+	return true;
 }
 

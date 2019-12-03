@@ -29,14 +29,16 @@
 int main(int argc, char ** argv)
 {  
     // Basic declarations
-    std::string * stream_name = NULL;
+    const char * stream_name = SERVER_NAME;
     H264LiveServerMediaSession *live_subsession = NULL;
     ServerMediaSession* server_media_session = NULL;
     Port * port = NULL;
     char* url = NULL;
+    RTSPServer* rtsp_server = NULL;
 
     // Set up the environment and event handler
     TaskScheduler* task_scheduler = BasicTaskScheduler::createNew();
+    // For Linux, it is fine to use the subclass from the library
     BasicUsageEnvironment* usage_environment = BasicUsageEnvironment::createNew(*task_scheduler);
 
     // check for arguments if any
@@ -54,7 +56,7 @@ int main(int argc, char ** argv)
     }
 
     // Create RTSP server
-    RTSPServer* rtsp_server = RTSPServer::createNew(*usage_environment, *port, NULL);
+    rtsp_server = RTSPServer::createNew(*usage_environment, *port, NULL);
 
     if (!rtsp_server) {
         *usage_environment << "Failed to create rtsp server : " << usage_environment->getResultMsg() << "\n";
@@ -62,10 +64,9 @@ int main(int argc, char ** argv)
     }
 
     // Create Media session
-    stream_name = new std::string(SERVER_NAME);
     server_media_session = ServerMediaSession::createNew(*usage_environment,
-            stream_name->c_str(), 
-            stream_name->c_str(), 
+            stream_name,
+            stream_name,
             "streaming web-camera live");
 
     // Select encoder related session

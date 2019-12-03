@@ -2,7 +2,6 @@
 #define __H264LIVESERVERMEDIASESSION_H_INCLUDED__
 
 #include "liveMedia.hh"
-//#include "OnDemandServerMediaSubsession.hh"
 #include "LiveSourceWithx264.h"
 class OnDemandServerMediaSubSession;
 class H264LiveServerMediaSession:public OnDemandServerMediaSubsession
