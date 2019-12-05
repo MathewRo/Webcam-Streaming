@@ -1,0 +1,102 @@
+diff --git a/libraries/live/BasicUsageEnvironment/Makefile b/libraries/live/BasicUsageEnvironment/Makefile
+index c5930f6..8466f97 100644
+--- a/libraries/live/BasicUsageEnvironment/Makefile
++++ b/libraries/live/BasicUsageEnvironment/Makefile
+@@ -2,7 +2,7 @@ INCLUDES = -Iinclude -I../UsageEnvironment/include -I../groupsock/include
+ PREFIX = /usr/local
+ LIBDIR = $(PREFIX)/lib
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/Makefile b/libraries/live/Makefile
+index 47b0129..b4fd52d 100644
+--- a/libraries/live/Makefile
++++ b/libraries/live/Makefile
+@@ -1,5 +1,5 @@
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/UsageEnvironment/Makefile b/libraries/live/UsageEnvironment/Makefile
+index cb98fcc..ded73a3 100644
+--- a/libraries/live/UsageEnvironment/Makefile
++++ b/libraries/live/UsageEnvironment/Makefile
+@@ -2,7 +2,7 @@ INCLUDES = -Iinclude -I../groupsock/include
+ PREFIX = /usr/local
+ LIBDIR = $(PREFIX)/lib
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/groupsock/Makefile b/libraries/live/groupsock/Makefile
+index 4c02a9d..7863bd7 100644
+--- a/libraries/live/groupsock/Makefile
++++ b/libraries/live/groupsock/Makefile
+@@ -2,7 +2,7 @@ INCLUDES = -Iinclude -I../UsageEnvironment/include
+ PREFIX = /usr/local
+ LIBDIR = $(PREFIX)/lib
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/liveMedia/Makefile b/libraries/live/liveMedia/Makefile
+index 806baf9..ca2a319 100644
+--- a/libraries/live/liveMedia/Makefile
++++ b/libraries/live/liveMedia/Makefile
+@@ -2,7 +2,7 @@ INCLUDES = -Iinclude -I../UsageEnvironment/include -I../groupsock/include
+ PREFIX = /usr/local
+ LIBDIR = $(PREFIX)/lib
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/mediaServer/Makefile b/libraries/live/mediaServer/Makefile
+index 98f680e..5af7f48 100644
+--- a/libraries/live/mediaServer/Makefile
++++ b/libraries/live/mediaServer/Makefile
+@@ -5,7 +5,7 @@ libBasicUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libgroupsock_LIB_SUFFIX = $(LIB_SUFFIX)
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/proxyServer/Makefile b/libraries/live/proxyServer/Makefile
+index 4e1a354..69921a0 100644
+--- a/libraries/live/proxyServer/Makefile
++++ b/libraries/live/proxyServer/Makefile
+@@ -5,7 +5,7 @@ libBasicUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libgroupsock_LIB_SUFFIX = $(LIB_SUFFIX)
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
+diff --git a/libraries/live/testProgs/Makefile b/libraries/live/testProgs/Makefile
+index 5ea3193..0466c4c 100644
+--- a/libraries/live/testProgs/Makefile
++++ b/libraries/live/testProgs/Makefile
+@@ -5,7 +5,7 @@ libBasicUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libUsageEnvironment_LIB_SUFFIX = $(LIB_SUFFIX)
+ libgroupsock_LIB_SUFFIX = $(LIB_SUFFIX)
+ ##### Change the following for your environment:
+-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
++COMPILE_OPTS =		$(INCLUDES) -I. -O0 -g3 -ggdb -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+ C =			c
+ C_COMPILER =		cc
+ C_FLAGS =		$(COMPILE_OPTS) $(CPPFLAGS) $(CFLAGS)
